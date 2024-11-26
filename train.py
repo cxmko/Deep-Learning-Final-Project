@@ -1,82 +1,100 @@
-import torch 
+import torch
 import os
 from tqdm import trange
 import argparse
 from torchvision import datasets, transforms
 import torch.nn as nn
 import torch.optim as optim
-
+import matplotlib.pyplot as plt  # For loss visualization
 
 from model import Generator, Discriminator
 from utils import D_train, G_train, save_models
 
-
-
+# Function to plot and save losses
+def plot_losses(G_losses, D_losses, filename='losses.png'):
+    plt.figure(figsize=(10, 5))
+    plt.plot(G_losses, label="Generator Loss")
+    plt.plot(D_losses, label="Discriminator Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.title("GAN Training Losses")
+    plt.savefig(filename)
+    plt.close()
 
 if __name__ == '__main__':
+    # Argument parsing
     parser = argparse.ArgumentParser(description='Train GAN.')
     parser.add_argument("--epochs", type=int, default=100,
                         help="Number of epochs for training.")
     parser.add_argument("--lr", type=float, default=0.0002,
-                      help="The learning rate to use for training.")
+                        help="The learning rate to use for training.")
     parser.add_argument("--batch_size", type=int, default=64, 
                         help="Size of mini-batches for SGD")
 
     args = parser.parse_args()
 
-
-    os.makedirs('chekpoints', exist_ok=True)
+    # Create directories for checkpoints and data
+    os.makedirs('checkpoints', exist_ok=True)
     os.makedirs('data', exist_ok=True)
+
+    # Check for CUDA availability and set the device accordingly
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
 
     # Data Pipeline
     print('Dataset loading...')
-    # MNIST Dataset
     transform = transforms.Compose([
                 transforms.ToTensor(),
                 transforms.Normalize(mean=(0.5), std=(0.5))])
 
     train_dataset = datasets.MNIST(root='data/MNIST/', train=True, transform=transform, download=True)
-    test_dataset = datasets.MNIST(root='data/MNIST/', train=False, transform=transform, download=False)
-
-
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, 
                                                batch_size=args.batch_size, shuffle=True)
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, 
-                                              batch_size=args.batch_size, shuffle=False)
     print('Dataset Loaded.')
 
-
+    # Model Loading
     print('Model Loading...')
     mnist_dim = 784
-    G = torch.nn.DataParallel(Generator(g_output_dim = mnist_dim)).cuda()
-    D = torch.nn.DataParallel(Discriminator(mnist_dim)).cuda()
-
-
-    # model = DataParallel(model).cuda()
+    G = Generator(g_output_dim=mnist_dim).to(device)
+    D = Discriminator(mnist_dim).to(device)
     print('Model loaded.')
-    # Optimizer 
 
+    # Define loss function
+    criterion = nn.BCELoss()
 
-
-    # define loss
-    criterion = nn.BCELoss() 
-
-    # define optimizers
-    G_optimizer = optim.Adam(G.parameters(), lr = args.lr)
-    D_optimizer = optim.Adam(D.parameters(), lr = args.lr)
+    # Define optimizers
+    G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
+    D_optimizer = optim.Adam(D.parameters(), lr=args.lr)
 
     print('Start Training :')
     
+    # Training loop
+    G_losses = []
+    D_losses = []
     n_epoch = args.epochs
-    for epoch in trange(1, n_epoch+1, leave=True):           
+    for epoch in trange(1, n_epoch + 1, leave=True, desc="Epoch Progress"):
+        G_epoch_loss, D_epoch_loss = 0.0, 0.0
         for batch_idx, (x, _) in enumerate(train_loader):
-            x = x.view(-1, mnist_dim)
-            D_train(x, G, D, D_optimizer, criterion)
-            G_train(x, G, D, G_optimizer, criterion)
+            x = x.view(-1, mnist_dim).to(device)
 
+            # Train Discriminator and Generator
+            D_loss = D_train(x, G, D, D_optimizer, criterion, device)
+            G_loss = G_train(x, G, D, G_optimizer, criterion, device)
+
+            G_epoch_loss += G_loss
+            D_epoch_loss += D_loss
+
+        # Average losses for this epoch
+        G_losses.append(G_epoch_loss / len(train_loader))
+        D_losses.append(D_epoch_loss / len(train_loader))
+
+        # Save model checkpoints every 10 epochs
         if epoch % 10 == 0:
-            save_models(G, D, 'checkpoints')
-                
-    print('Training done')
+            save_models(G, D, G_optimizer, D_optimizer, 'checkpoints', epoch)
+
+    # Plot losses after training
+    plot_losses(G_losses, D_losses)
+    print('Training done.')
 
         
