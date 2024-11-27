@@ -5,6 +5,9 @@ import os
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
+
+
+
 def D_train(x, G, D, D_optimizer, criterion, device):
     #=======================Train the discriminator=======================#
     D.zero_grad()

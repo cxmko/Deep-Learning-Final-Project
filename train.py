@@ -6,7 +6,6 @@ from torchvision import datasets, transforms
 import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt  # For loss visualization
-
 from model import Generator, Discriminator
 from utils import D_train, G_train, save_models
 
@@ -21,6 +20,13 @@ def plot_losses(G_losses, D_losses, filename='losses.png'):
     plt.title("GAN Training Losses")
     plt.savefig(filename)
     plt.close()
+def reset_weights(model):
+    for layer in model.children():
+        if hasattr(layer, 'reset_parameters'):
+            layer.reset_parameters()
+
+
+
 
 if __name__ == '__main__':
     # Argument parsing
@@ -57,15 +63,17 @@ if __name__ == '__main__':
     print('Model Loading...')
     mnist_dim = 784
     G = Generator(g_output_dim=mnist_dim).to(device)
+    reset_weights(G)
     D = Discriminator(mnist_dim).to(device)
+    reset_weights(D)
     print('Model loaded.')
 
     # Define loss function
     criterion = nn.BCELoss()
 
     # Define optimizers
-    G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
-    D_optimizer = optim.Adam(D.parameters(), lr=args.lr)
+    G_optimizer = optim.Adam(G.parameters(), lr=args.lr,betas=(0.5, 0.999))
+    D_optimizer = optim.Adam(D.parameters(), lr=args.lr,betas=(0.5, 0.999))
 
     print('Start Training :')
     
@@ -89,12 +97,16 @@ if __name__ == '__main__':
         G_losses.append(G_epoch_loss / len(train_loader))
         D_losses.append(D_epoch_loss / len(train_loader))
 
+        print(f"Epoch {epoch}/{n_epoch}: G_loss: {G_losses[-1]}, D_loss: {D_losses[-1]}")
+
+
         # Save model checkpoints every 10 epochs
         if epoch % 10 == 0:
-            save_models(G, D, G_optimizer, D_optimizer, 'checkpoints', epoch)
+            save_models(G, D, 'checkpoints')
 
     # Plot losses after training
     plot_losses(G_losses, D_losses)
     print('Training done.')
+
 
         
