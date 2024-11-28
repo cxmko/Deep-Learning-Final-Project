@@ -72,8 +72,8 @@ if __name__ == '__main__':
     criterion = nn.BCELoss()
 
     # Define optimizers
-    G_optimizer = optim.Adam(G.parameters(), lr=args.lr,betas=(0.5, 0.999))
-    D_optimizer = optim.Adam(D.parameters(), lr=args.lr,betas=(0.5, 0.999))
+    G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
+    D_optimizer = optim.Adam(D.parameters(), lr=args.lr)
 
     print('Start Training :')
     
