@@ -51,18 +51,61 @@ def G_train(x, G, D, G_optimizer, criterion, device):
 
     return G_loss.data.item()
 
+def E_train(E, cluster_ids, z, G, E_optimizer, device):
+    """
+    Train the encoder to predict the correct cluster for generated samples.
+    """
+    E.zero_grad()
+
+    # Generate fake data from the generator
+    fake_data = G(z).detach()
+
+    # Predict cluster probabilities for fake data
+    cluster_probs = E(fake_data)
+
+    # Target clusters in one-hot encoded form
+    target_clusters = torch.nn.functional.one_hot(cluster_ids, cluster_probs.size(1)).float().to(device)
+
+    # Cross-entropy loss for encoder
+    E_loss = torch.nn.functional.cross_entropy(cluster_probs, target_clusters)
+    E_loss.backward()
+    E_optimizer.step()
+
+    return E_loss.item()
 
 def save_models(G, D, folder):
     torch.save(G.state_dict(), os.path.join(folder, 'G.pth'))
     torch.save(D.state_dict(), os.path.join(folder, 'D.pth'))
 
 
-def load_model(G, folder):
-    ckpt_path = os.path.join(folder, 'G.pth')
+import os
+import torch
+
+def load_model(model, folder, model_type):
+    """
+    Loads the state_dict from the checkpoint for the given model.
+    
+    Args:
+    - model: The model (either Generator or Discriminator).
+    - folder: Path to the folder containing the checkpoint files.
+    - model_type: Type of model ('G' for Generator, 'D' for Discriminator). Defaults to 'G'.
+    
+    Returns:
+    - model: The model with loaded weights.
+    """
+    # Determine the checkpoint file based on the model type
+    if model_type == 'G':
+        ckpt_path = os.path.join(folder, 'G.pth')  # For Generator
+    elif model_type == 'D':
+        ckpt_path = os.path.join(folder, 'D.pth')  # For Discriminator
+    else:
+        raise ValueError("Invalid model_type. Choose either 'G' for Generator or 'D' for Discriminator.")
+    
+    # Load the checkpoint
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     ckpt = torch.load(ckpt_path, map_location=device)
     
-    # Load the model state_dict
-    G.load_state_dict({k.replace('module.', ''): v for k, v in ckpt.items()})
+    # Load the state_dict of the model (handling multi-GPU if applicable)
+    model.load_state_dict({k.replace('module.', ''): v for k, v in ckpt.items()})
     
-    return G
+    return model
