@@ -61,7 +61,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate Samples using OBRS with GAN.')
     parser.add_argument("--batch_size", type=int, default=128, help="The batch size to use for generation.")
     parser.add_argument("--num_samples", type=int, default=10000, help="The number of samples to generate.")
-    parser.add_argument("--K", type=int, default=2, help="The sampling budget.")
+    parser.add_argument("--K", type=int, default=50, help="The sampling budget.")
     args = parser.parse_args()
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -101,5 +101,4 @@ if __name__ == '__main__':
                     n_samples += 1
 
     print(f"Generated {n_samples} samples and saved to 'samples' directory.")
-
 
