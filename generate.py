@@ -56,25 +56,7 @@ def update_c_K_dichotomy(discriminator, generator, z_dim, batch_size, K, device,
 
     return c_K
 
-"""""
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-print(f"Using device: {device}")
-batch_size = 128
-z_dim = 100
-mnist_dim = 784
-generator = Generator(g_output_dim=mnist_dim).to(device)
-discriminator = Discriminator(d_input_dim=mnist_dim).to(device)
-
-# Load pre-trained models
-generator = load_model(generator, 'checkpoints', "G")
-discriminator = load_model(discriminator, 'checkpoints', "D")
-
-generator = torch.nn.DataParallel(generator).to(device)
-discriminator = torch.nn.DataParallel(discriminator).to(device)
-K=50
-ck=update_c_K_dichotomy(discriminator, generator, z_dim, batch_size, K, device, epsilon=1e-3)
-print(ck)"""
 
 def calculate_acceptance(discriminator, samples, c_K, device):
     # Calculate acceptance probabilities using the discriminator.
@@ -118,7 +100,7 @@ def obrs_sampling(generator, discriminator, z_dim, num_samples, batch_size, K, d
         # Accept or reject samples
         accept_mask = torch.bernoulli(acceptance_probs).bool()
         accepted_samples = generated_samples[accept_mask]
-        print(len(accepted_samples)/len(generated_samples))
+        #print(len(accepted_samples)/len(generated_samples))
 
         # Append accepted samples
         samples.append(accepted_samples)
