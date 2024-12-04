@@ -7,12 +7,13 @@ import torch.nn as nn
 import torch.optim as optim
 import matplotlib.pyplot as plt
 from model import Generator, Discriminator
-from utils import D_train, G_train, update_cK, save_models
+from utils import D_train, G_train, save_models, load_model
 
 # Function to plot and save losses
-def plot_losses(G_losses, D_losses, filename='losses.png'):
+def plot_losses(G_lossesOBRS,G_lossesBCE, D_losses, filename='losses.png'):
     plt.figure(figsize=(10, 5))
-    plt.plot(G_losses, label="Generator Loss")
+    plt.plot(G_lossesOBRS, label="Generator Loss OBRS")
+    plt.plot(G_lossesBCE, label="Generator Loss OBRS")
     plt.plot(D_losses, label="Discriminator Loss")
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
@@ -67,44 +68,59 @@ if __name__ == '__main__':
     reset_weights(G)
     D = Discriminator(mnist_dim).to(device)
     reset_weights(D)
+    G = load_model(G, 'checkpoints', "G")
+    D = load_model(D, 'checkpoints', "D")
     print('Model loaded.')
 
     # Define loss function
     criterion = nn.BCELoss()
 
     # Define optimizers
-    G_optimizer = optim.Adam(G.parameters(), lr=args.lr,betas=(0.5, 0.999))
-    D_optimizer = optim.Adam(D.parameters(), lr=0.00002,betas=(0.5, 0.999))
+    G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
+    D_optimizer = optim.Adam(D.parameters(), lr=0.00002)
 
     print('Start Training:')
     
     # Training loop
-    G_losses = []
-    D_losses = []  # Initial value for cK
+    G_lossesOBRS = []
+    G_lossesBCE = []
+    D_losses = []  
+    j=0
+    b=False
+    cK=1
     for epoch in trange(1, args.epochs + 1, leave=True, desc="Epoch Progress"):
-        G_epoch_loss, D_epoch_loss = 0.0, 0.0
+        G_epoch_loss1, G_epoch_loss2, D_epoch_loss = 0.0, 0.0, 0.0
         for batch_idx, (x, _) in enumerate(train_loader):
             x = x.view(-1, mnist_dim).to(device)
+            if j%1000==0:
+                b=True
+                #print(cK)
+
 
             # Train Discriminator
             D_loss = D_train(x, G, D, D_optimizer, criterion, device)
             D_epoch_loss += D_loss
 
             # Train Generator with OBRS and GAN Divergence
-            G_loss = G_train(x, G, D, G_optimizer, criterion, device, args.rejection_budget)
-            G_epoch_loss += G_loss
+            G_loss, g, cK = G_train(x, G, D, G_optimizer, criterion, device, args.rejection_budget,b,cK)
+            G_epoch_loss1 += G_loss
+            G_epoch_loss2 += g
+
+            b=False
+            j+=1
 
         # Average losses for this epoch
-        G_losses.append(G_epoch_loss / len(train_loader))
+        G_lossesOBRS.append(G_epoch_loss1 / len(train_loader))
+        G_lossesBCE.append(G_epoch_loss2 / len(train_loader))
         D_losses.append(D_epoch_loss / len(train_loader))
 
-        print(f"Epoch {epoch}/{args.epochs}: G_loss: {G_losses[-1]}, D_loss: {D_losses[-1]}")
+        print(f"Epoch {epoch}/{args.epochs}: G_loss_OBRS: {G_lossesOBRS[-1]}, G_loss_BCE: {G_lossesBCE[-1]}, D_loss: {D_losses[-1]}")
 
         # Save model checkpoints every 10 epochs
         if epoch % 10 == 0:
             save_models(G, D, 'checkpoints')
 
     # Plot losses after training
-    plot_losses(G_losses, D_losses)
+    plot_losses(G_lossesOBRS,G_lossesBCE, D_losses)
     print('Training done.')
 

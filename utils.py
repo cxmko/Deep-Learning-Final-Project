@@ -18,21 +18,24 @@ def update_M(r):
     M = torch.max(r).item()
     return M
 
-
+"""
 ### Function to Update cK ###
 def update_cK(r, rejection_budget):
-    """
+
+    
     Compute c_K to enforce the budget constraint.
     Args:
         r (Tensor): Likelihood ratios for the generated samples.
         rejection_budget (float): Budget K for rejection sampling.
     Returns:
         c_K (float): Scaling constant for rejection sampling.
-    """
+    
     mean_likelihood_ratio = r.mean().item()
     return 1 / (mean_likelihood_ratio * rejection_budget)
 
-def update_c_K_dichotomy(discriminator, generator, x, K, device, epsilon=1e-1):
+"""
+
+def update_c_K_dichotomy(discriminator, generator, x, K, device, epsilon=1e-3):
     # Step 1: Initialize the range for c_K
     cmin = 1e-10
     cmax = 1e10
@@ -53,9 +56,10 @@ def update_c_K_dichotomy(discriminator, generator, x, K, device, epsilon=1e-1):
 
         # Calculate likelihood ratios (assumes logits are already in log space)
         likelihood_ratios = torch.exp(logits).squeeze()
+        M=update_M(likelihood_ratios)
 
         # Calculate acceptance probabilities
-        acceptance_probs = torch.minimum(likelihood_ratios * c_K, torch.tensor(1.0).to(device))
+        acceptance_probs = torch.minimum(likelihood_ratios * c_K/M, torch.tensor(1.0).to(device))
 
         # Calculate the loss: the sum of the acceptance probabilities minus 1/K
         L_c_K = acceptance_probs.sum().item() - (x.shape[0] / K)
@@ -150,7 +154,7 @@ def D_train(x, G, D, D_optimizer, criterion, device):
 
 
 ### Generator Training ###
-def G_train(x, G, D, G_optimizer, criterion, device, rejection_budget):
+def G_train(x, G, D, G_optimizer, criterion, device, rejection_budget,b,cK):
     """
     Train the generator to produce samples indistinguishable from real samples.
     Args:
@@ -174,18 +178,22 @@ def G_train(x, G, D, G_optimizer, criterion, device, rejection_budget):
     # Calculate likelihood ratios and update M and c_K
     r = D_output / (1 - D_output + 1e-8)
     M = update_M(r)
-    cK = update_cK(r, rejection_budget)
+    if b:
+        cK = update_c_K_dichotomy(D, G, x, rejection_budget, device, epsilon=1e-3)
     aO = a_O(r, cK, M)  # Acceptance probabilities
 
     # Compute the generator loss using GAN divergence and acceptance function
     generator_loss = torch.mean(rejection_budget * aO * f(r / (rejection_budget * aO)))
+
+    y = torch.ones(x.shape[0], 1).to(device)
+    G_loss = criterion(D_output, y)
 
     generator_loss.backward()
     # Apply gradient clipping
     torch.nn.utils.clip_grad_norm_(G.parameters(), max_norm=1.0)
     G_optimizer.step()
 
-    return generator_loss.item()
+    return generator_loss.item(),G_loss.data.item(), cK
 
 
 ### Save Models ###
