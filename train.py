@@ -32,11 +32,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train GAN with OBRS.')
     parser.add_argument("--epochs", type=int, default=100,
                         help="Number of epochs for training.")
-    parser.add_argument("--lr", type=float, default=0.0001,
+    parser.add_argument("--lr", type=float, default=0.0001/2,
                         help="The learning rate to use for training.")
     parser.add_argument("--batch_size", type=int, default=64, 
                         help="Size of mini-batches for SGD.")
-    parser.add_argument("--rejection_budget", type=float, default=5.0,
+    parser.add_argument("--rejection_budget", type=float, default=10.0,
                         help="Rejection sampling budget K (default: 5).")
 
     args = parser.parse_args()
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     #G_optimizer = optim.Adam(G.parameters(), lr=args.lr,betas=(0.5,0.999))
     #D_optimizer = optim.Adam(D.parameters(), lr=0.00002,betas=(0.5,0.999))
     G_optimizer = optim.Adam(G.parameters(), lr=args.lr)
-    D_optimizer = optim.Adam(D.parameters(), lr=0.00001)
+    D_optimizer = optim.Adam(D.parameters(), lr=0.00001/2)
 
     print('Start Training:')
     

@@ -4,72 +4,21 @@ import os
 import argparse
 from torchvision.utils import save_image
 from model import Generator, Discriminator
-from utils import load_model, update_M
-
-def update_c_K_dichotomy(discriminator, generator, z_dim, batch_size, K, device, epsilon=1e-3):
-    # Step 1: Initialize the range for c_K
-    cmin = 1e-10
-    cmax = 1e10
-
-    # Step 2: Start with the midpoint of the range for c_K
-    c_K = (cmax + cmin) / 2
-
-    # Step 3: Define the loss function L(c_K)
-    # a(x_fake, c_K) = min(exp(D(x_fake)) * c_K, 1) (probabilities for acceptance)
-    def loss_function(c_K):
-        # Generate a batch of fake samples from the generator
-        z = torch.randn(batch_size, z_dim).to(device)
-        generated_samples = generator(z).detach()
-        generated_samples_flat = generated_samples.view(batch_size, -1)
-
-        # Get the discriminator logits
-        logits = discriminator(generated_samples_flat,True)
-
-        # Calculate likelihood ratios (assumes logits are already in log space)
-        likelihood_ratios = torch.exp(logits).squeeze()
-        M=update_M(logits)
-
-        # Calculate acceptance probabilities
-        acceptance_probs = torch.minimum(likelihood_ratios * c_K/M, torch.tensor(1.0).to(device))
-
-        # Calculate the loss: the sum of the acceptance probabilities minus 1/K
-        L_c_K = acceptance_probs.sum().item() - (batch_size / K)
-        return L_c_K
-
-    # Step 4: Iteratively adjust c_K using dichotomy until the loss is within the threshold epsilon
-    while True:
-        L_c_K = loss_function(c_K)
-        
-        # Step 5: Check if the absolute value of the loss is within the tolerance
-        if abs(L_c_K) < epsilon:
-            break
-
-        # Step 6 & 7: Adjust the bounds based on the sign of the loss function
-        if L_c_K > 0:
-            cmax = c_K
-        else:
-            cmin = c_K
-
-        # Step 10: Update c_K to the midpoint of the current bounds
-        c_K = (cmax + cmin) / 2
-
-    return c_K
+from utils import load_model, update_M, update_c_K_dichotomy
 
 
-
-def calculate_acceptance(discriminator, samples, c_K, device):
+def calculate_acceptance(discriminator, samples, c_K, device,M):
     # Calculate acceptance probabilities using the discriminator.
     logits = discriminator(samples,True)
     likelihood_ratios = torch.exp(logits).squeeze()  # Approximate p(x) / p̂(x)
 
     # Optionally, scale the likelihood ratios to a reasonable range
     likelihood_ratios = torch.clamp(likelihood_ratios, min=0.01, max=10.0)  # Clamping the values
-    M=update_M(likelihood_ratios)
 
     acceptance_probs = torch.minimum(likelihood_ratios * c_K/M, torch.tensor(1.0).to(device))
     return acceptance_probs
 
-def obrs_sampling(generator, discriminator, z_dim, num_samples, batch_size, K, device):
+def obrs_sampling(generator, discriminator, z_dim, num_samples, batch_size, K,M, device):
     # Generate samples using OBRS.
     generator.eval()
     discriminator.eval()
@@ -78,7 +27,7 @@ def obrs_sampling(generator, discriminator, z_dim, num_samples, batch_size, K, d
     n_generated = 0
 
     # Compute c_K using dichotomy or a predefined value
-    c_K = update_c_K_dichotomy(discriminator, generator, z_dim, batch_size, K, device, epsilon=1e-3) 
+    c_K = update_c_K_dichotomy(discriminator, generator,  batch_size, K, device,M, epsilon=1e-3) 
 
     while n_generated < num_samples:
         # Generate noise and samples
@@ -95,7 +44,7 @@ def obrs_sampling(generator, discriminator, z_dim, num_samples, batch_size, K, d
         generated_samples_flat = generated_samples.view(batch_size, -1)  # Flatten to [batch_size, 784]
 
         # Calculate acceptance probabilities
-        acceptance_probs = calculate_acceptance(discriminator, generated_samples_flat, c_K, device)
+        acceptance_probs = calculate_acceptance(discriminator, generated_samples_flat, c_K, device,M)
         
         # Accept or reject samples
         accept_mask = torch.bernoulli(acceptance_probs).bool()
@@ -141,9 +90,9 @@ if __name__ == '__main__':
 
     print('Start Generating Samples with OBRS...')
     os.makedirs('samples', exist_ok=True)
-
+    M=update_M(args.batch_size, generator, discriminator, device)
     # Generate samples using OBRS
-    samples = obrs_sampling(generator, discriminator, z_dim, args.num_samples, args.batch_size, args.K, device)
+    samples = obrs_sampling(generator, discriminator, z_dim, args.num_samples, args.batch_size, args.K, M,device)
 
     # Save the generated samples as images
     n_samples = 0

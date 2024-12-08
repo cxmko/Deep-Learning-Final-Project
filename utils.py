@@ -6,17 +6,39 @@ print(f"Using device: {device}")
 
 
 ### Function to Update M ###
-def update_M(r):
+def update_M(d, G, D, device,n=10):
     """
-    Compute M = sup_x∈X p(x)/p̂(x) for a batch (max likelihood ratio).
+    Compute a more precise estimate of M = sup_x∈X p(x)/p̂(x) by calculating r(x) n times
+    and taking the maximum.
+
     Args:
-        D_output_fake (Tensor): Discriminator outputs for fake samples.
+        n (int): Number of iterations to compute r(x).
+        G (nn.Module): Generator model.
+        D (nn.Module): Discriminator model.
+        x_shape (tuple): Shape of the input batch (used for z sampling).
+        device (torch.device): Device to perform computations.
     Returns:
-        M (float): Maximum likelihood ratio.
+        float: Maximum likelihood ratio across n computations.
     """
-    # Clamp discriminator outputs to avoid division by near-zero values
-    M = torch.max(r).item()
-    return M
+    max_r = -float('inf')  # Initialize with a very small value
+
+    for _ in range(n):
+        # Generate random noise and fake samples
+        z = torch.randn(d, 100).to(device)
+        G_output = G(z)
+        
+        # Compute discriminator outputs for fake samples
+        D_output = D(G_output)
+        
+        # Calculate likelihood ratios (r(x))
+        r = D_output / (1 - D_output + 1e-8)
+        
+        # Update the maximum likelihood ratio
+        batch_max = torch.max(r).item()
+        max_r = max(max_r, batch_max)
+    
+    return max_r
+
 
 """
 ### Function to Update cK ###
@@ -35,7 +57,7 @@ def update_cK(r, rejection_budget):
 
 """
 
-def update_c_K_dichotomy(discriminator, generator, x, K, device, epsilon=1e-3):
+def update_c_K_dichotomy(discriminator, generator, d, K, device,M, epsilon=1e-3):
     # Step 1: Initialize the range for c_K
     cmin = 1e-10
     cmax = 1e10
@@ -45,29 +67,29 @@ def update_c_K_dichotomy(discriminator, generator, x, K, device, epsilon=1e-3):
 
     # Step 3: Define the loss function L(c_K)
     # a(x_fake, c_K) = min(exp(D(x_fake)) * c_K, 1) (probabilities for acceptance)
-    def loss_function(c_K):
+    def loss_function(c_K,M):
         # Generate a batch of fake samples from the generator
-        z = torch.randn(x.shape[0], 100).to(device)
+        z = torch.randn(d, 100).to(device)
         generated_samples = generator(z).detach()
-        generated_samples_flat = generated_samples.view(x.shape[0], -1)
+        generated_samples_flat = generated_samples.view(d, -1)
 
         # Get the discriminator logits
         logits = discriminator(generated_samples_flat,True)
 
         # Calculate likelihood ratios (assumes logits are already in log space)
         likelihood_ratios = torch.exp(logits).squeeze()
-        M=update_M(likelihood_ratios)
+        
 
         # Calculate acceptance probabilities
         acceptance_probs = torch.minimum(likelihood_ratios * c_K/M, torch.tensor(1.0).to(device))
 
         # Calculate the loss: the sum of the acceptance probabilities minus 1/K
-        L_c_K = acceptance_probs.sum().item() - (x.shape[0] / K)
+        L_c_K = acceptance_probs.sum().item() - (d / K)
         return L_c_K
 
     # Step 4: Iteratively adjust c_K using dichotomy until the loss is within the threshold epsilon
     while True:
-        L_c_K = loss_function(c_K)
+        L_c_K = loss_function(c_K,M)
         
         # Step 5: Check if the absolute value of the loss is within the tolerance
         if abs(L_c_K) < epsilon:
@@ -177,9 +199,9 @@ def G_train(x, G, D, G_optimizer, criterion, device, rejection_budget,b,cK):
 
     # Calculate likelihood ratios and update M and c_K
     r = D_output / (1 - D_output + 1e-8)
-    M = update_M(r)
+    M = update_M(x.shape[0],G,D,device)
     if b:
-        cK = update_c_K_dichotomy(D, G, x, rejection_budget, device, epsilon=1e-3)
+        cK = update_c_K_dichotomy(D, G, x.shape[0], rejection_budget, device,M, epsilon=1e-3)
     aO = a_O(r, cK, M)  # Acceptance probabilities
 
     # Compute the generator loss using GAN divergence and acceptance function
