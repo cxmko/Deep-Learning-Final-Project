@@ -124,8 +124,8 @@ python generate.py --num_samples 10000
 
 ##  **Report and Presentation**
 
-- **[Cameron_Mouangue_Rapport_OBRS.pdf](./Cameron_Mouangue_Rapport_OBRS.pdf)**: Detailed report explaining the theoretical foundation of OBRS, its implementation, and experimental results.
-- **[Cameron_Mouangue_Presentation_OBRS.pdf](./Presentation_Cameron.pdf)**: Slide presentation summarizing key findings and methodology.
+- **[Written Report](./Cameron_Mouangue_Rapport_OBRS.pdf)**: Detailed report explaining the theoretical foundation of OBRS, its implementation, and experimental results.
+- **[Presentation](./Presentation_Cameron.pdf)**: Slide presentation summarizing key findings and methodology.
 
 ---
 
