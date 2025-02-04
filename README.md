@@ -15,7 +15,7 @@ This project applies the **Optimal Budget Rejection Sampling (OBRS)** method to 
 ├── utils.py                      # Utility functions for training and generation
 ├── requirements.txt              # Python dependencies for the project
 ├── Cameron_Mouangue_Rapport_OBRS.pdf  # Full project report 
-├── Presentation_Cameron.pdf  # Project presentation slides
+├── Presentation_Cameron.pdf      # Project presentation slides
 └── README.md                     # Project documentation
 ```
 
